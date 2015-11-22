@@ -9,98 +9,71 @@
 # Launch the setup script to make sure hardware setup looks good
 loadusr -w ./setup.sh
 
-# start haltalk server
-loadusr -W haltalk
-
 
 # ###################################
 # Core EMC/HAL Loads
 # ###################################
 
 # kinematics
-loadrt lineardeltakins
-
-# settings for delta printer
-setp lineardeltakins.L [MACHINE]CF_ROD
-setp lineardeltakins.R [MACHINE]DELTA_R
+loadrt trivkins
 
 # motion controller, get name and thread periods from ini file
 # trajectory planner
 loadrt tp
-loadrt [EMCMOT]EMCMOT servo_period_nsec=[EMCMOT]SERVO_PERIOD num_joints=[TRAJ]AXES num_aio=15 tp=tp kins=lineardeltakins
+loadrt [EMCMOT]EMCMOT servo_period_nsec=[EMCMOT]SERVO_PERIOD num_joints=[TRAJ]AXES tp=tp kins=trivkins
 
 
 # load low-level drivers
 loadrt hal_bb_gpio output_pins=816,822,823,824,825,826,914,923,925 input_pins=807,808,809,810,817,911,913
 loadrt [PRUCONF](DRIVER) prucode=$(HAL_RTMOD_DIR)/[PRUCONF](PRUBIN) [PRUCONF](CONFIG) halname=hpg
-loadrt pid count=2
+loadrt pid num_chan=2
 loadrt limit1 count=2
+loadrt CoreXY
 
 
 # Python user-mode HAL module to read ADC value and generate a thermostat output for PWM
 # c = analog input channel and thermistor table
-loadusr -Wn Therm hal_temp_bbb -n Therm -c 04:epcos_B57560G1104,05:epcos_B57560G1104 -b CRAMPS
+loadusr -Wn Therm hal_temp_bbb -n Therm -c 04:semitec_104GT_2,05:epcos_B57560G1104 -b CRAMPS
 
-#used for comparing temperature set value with actual for waiting on temperature
-loadrt wcomp count=1
-loadrt sum2 count=4
-loadrt mult2 count=5
-loadrt abs count=6
-loadrt hypot count=2
-loadrt invert count=1
-loadrt mux4 count=1
-loadrt oneshot count=1
-loadrt ddt count=4
-#loadrt lincurve count=1 personality=3
-newinst lincurve lincurve.0 pincount=3
-loadrt lineardeltajointscartesian count=1
+
 
 # ################################################
 # THREADS
 # ################################################
 
-addf hpg.capture-position   		  servo-thread
 addf bb_gpio.read                         servo-thread
+addf hpg.capture-position                 servo-thread
+addf CoreXY.0.read                        servo-thread
 addf motion-command-handler               servo-thread
 addf motion-controller                    servo-thread
 addf pid.0.do-pid-calcs                   servo-thread
 addf pid.1.do-pid-calcs                   servo-thread
 addf limit1.0                             servo-thread
 addf limit1.1                             servo-thread
-addf hpg.update             		  servo-thread
+addf CoreXY.0.write                       servo-thread
+addf hpg.update                           servo-thread
 addf bb_gpio.write                        servo-thread
 
-addf wcomp.0                              servo-thread
-addf sum2.0                               servo-thread
-addf sum2.1                               servo-thread
-addf sum2.2				  servo-thread
-addf sum2.3				  servo-thread
-addf mult2.0                              servo-thread
-addf mult2.1				  servo-thread
-addf mult2.2				  servo-thread
-addf mult2.3				  servo-thread
-addf mult2.4				  servo-thread
-#addf abs.0				  servo-thread
-#addf abs.1			  	  servo-thread
-#addf abs.2			          servo-thread
-addf abs.3				  servo-thread
-addf abs.4			  	  servo-thread
-addf abs.5			          servo-thread
-#addf hypot.0				  servo-thread
-addf hypot.1				  servo-thread
-addf invert.0				  servo-thread
-addf mux4.0				  servo-thread
-addf oneshot.0				  servo-thread
-addf ddt.0				  servo-thread
-addf ddt.1				  servo-thread
-addf ddt.2				  servo-thread
-addf ddt.3				  servo-thread
-addf lincurve.0				  servo-thread
-addf lineardeltajointscartesian.0	  servo-thread
+
 # ######################################################
 # Axis-of-motion Specific Configs (not the GUI)
 # ######################################################
 
+# ################
+# CoreXZ Setup
+# ################
+net corexz.X.pos-cmd <= axis.0.motor-pos-cmd
+net corexz.X.pos-cmd => CoreXY.0.axis.0.pos-cmd
+net corexz.Z.pos-cmd <= axis.2.motor-pos-cmd
+net corexz.Z.pos-cmd => CoreXY.0.axis.1.pos-cmd
+
+net corexz.X.pos-fb  <= CoreXY.0.axis.0.pos-fb
+net corexz.X.pos-fb  => axis.0.motor-pos-fb
+net corexz.Z.pos-fb  <= CoreXY.0.axis.1.pos-fb
+net corexz.Z.pos-fb  => axis.2.motor-pos-fb
+
+setp CoreXY.0.axis.0.gain 0.5
+setp CoreXY.0.axis.1.gain -1.5
 
 # ################
 # X [0] Axis
@@ -115,11 +88,11 @@ net emcmot.00.enable => hpg.stepgen.00.enable
 
 
 # position command and feedback
-net emcmot.00.pos-cmd <= axis.0.motor-pos-cmd
+net emcmot.00.pos-cmd <= CoreXY.0.joint.0.pos-cmd
 net emcmot.00.pos-cmd => hpg.stepgen.00.position-cmd
 
 net motor.00.pos-fb <= hpg.stepgen.00.position-fb
-net motor.00.pos-fb => axis.0.motor-pos-fb
+net motor.00.pos-fb => CoreXY.0.joint.0.pos-fb
 
 
 # timing parameters
@@ -193,11 +166,11 @@ net emcmot.02.enable => hpg.stepgen.02.enable
 
 
 # position command and feedback
-net emcmot.02.pos-cmd <= axis.2.motor-pos-cmd
+net emcmot.02.pos-cmd <= CoreXY.0.joint.1.pos-cmd
 net emcmot.02.pos-cmd => hpg.stepgen.02.position-cmd
 
 net motor.02.pos-fb <= hpg.stepgen.02.position-fb
-net motor.02.pos-fb => axis.2.motor-pos-fb
+net motor.02.pos-fb => CoreXY.0.joint.1.pos-fb
 
 
 # timing parameters
@@ -220,8 +193,9 @@ setp hpg.stepgen.02.dirpin         818
 
 
 # ################
-# A [3] Axis (Extruder velocity controlled)
+# A [3] Axis (Extruder)
 # ################
+
 # axis enable chain
 newsig emcmot.03.enable bit
 sets emcmot.03.enable FALSE
@@ -229,115 +203,13 @@ sets emcmot.03.enable FALSE
 net emcmot.03.enable <= axis.3.amp-enable-out
 net emcmot.03.enable => hpg.stepgen.03.enable
 
-#here i pass the value of the analog output from M67 E1 Q.. or M68 E1 Q.. to the multiplicator
-net line-width  motion.analog-out-02 => mult2.0.in0
-net line-height motion.analog-out-03 => mult2.0.in1
-net line-cross-section mult2.0.out => mult2.1.in1
 
-#take all the actual speeds from the axes and calculate resulting speed.
-#if you don't have a linear delta then use hypot.0.out as input for the calculations
-#net xvel axis.0.joint-vel-cmd => abs.0.in
-#net xvel-abs abs.0.out => hypot.0.in0
-#net yvel axis.1.joint-vel-cmd => abs.1.in
-#net yvel-abs abs.1.out => hypot.0.in1
-#net zvel axis.2.joint-vel-cmd => abs.2.in
-#net zvel-abs abs.2.out => hypot.0.in2
+# position command and feedback
+net emcmot.03.pos-cmd <= axis.3.motor-pos-cmd
+net emcmot.03.pos-cmd => hpg.stepgen.03.position-cmd
 
-net joint-0-pos axis.0.joint-pos-cmd lineardeltajointscartesian.0.C-pos
-net joint-1-pos axis.1.joint-pos-cmd lineardeltajointscartesian.0.A-pos
-net joint-2-pos axis.2.joint-pos-cmd lineardeltajointscartesian.0.B-pos
-setp lineardeltajointscartesian.0.ROD [MACHINE]CF_ROD
-setp lineardeltajointscartesian.0.RAD [MACHINE]DELTA_R
-
-net xpos lineardeltajointscartesian.0.x-pos => ddt.1.in
-net xvel ddt.1.out abs.3.in
-net xvel-abs abs.3.out => hypot.1.in0
-
-net ypos lineardeltajointscartesian.0.y-pos => ddt.2.in
-net yvel ddt.2.out abs.4.in
-net yvel-abs abs.4.out => hypot.1.in1
-
-net zpos lineardeltajointscartesian.0.z-pos => ddt.3.in
-net zvel ddt.3.out abs.5.in
-net zvel-abs abs.5.out => hypot.1.in2
-
-#multiply area with speed and we get discharge (mm^3 per second)
-#use this one (below when you have a lineardelta type machine
-net nozzle-vel-cartesian hypot.1.out => mult2.1.in0
-#uncomment line below if you have a cartesian type machine
-#net nozzle-vel-cartesian hypot.0.out => mult2.1.in0
-
-net nozzle-discharge mult2.1.out => mult2.2.in0
-
-#calculate filament cross section area
-#PI divided by 4
-setp mult2.3.in0 0.7854
-setp mult2.4.in0 [EXTRUDER]DIA_FILAMENT
-setp mult2.4.in1 [EXTRUDER]DIA_FILAMENT
-
-net diameter-squared mult2.4.out => mult2.3.in1
-net filament-area mult2.3.out => invert.0.in
-net divide-by-filament-area invert.0.out => mult2.2.in1
-
-# now the solution of Andy Pugh for automatically retracting/priming
-#loadrt mux4 count=1
-#00 = motion without extrusion
-#01 = retract
-#10 = motion with extrusion
-#11 = pre-charge
-
-setp mux4.0.in0 0
-setp mux4.0.in1 -4
-net extrude-rate mult2.2.out => mux4.0.in2
-setp mux4.0.in3 4
-
-# We want the retract-charge to run for a fixed time:
-# when sel0 set to "1" meaning motion with extrusion" the on the rising edge
-# there will temporarily be also sel1 which is high, meaning a pre-charge because the
-# sel combination is 11
-# when sel1 set to "0" meaning decoupling motion with extrusion" then the falling edge
-# will trigger a 01 combination, meaning a retract
-net trigger motion.digital-out-02 oneshot.0.in mux4.0.sel1
-net pulse oneshot.0.out mux4.0.sel0 motion.feed-hold
-setp oneshot.0.rising 1
-setp oneshot.0.falling 1
-setp oneshot.0.retriggerable 1
-#setp oneshot.0.width 0.0
-#by setting the width, the automatic retract/precharge can be disabled
-net trigger-time motion.analog-out-04 => oneshot.0.width
-
-#get readout from the current motion pin
-net current-motion-type motion.current-motion
-
-# these are used for a small offset in velocity during acceleration (buildup pressure inside
-# the nozzle because of the current speed. Take the maximum accel you've specified in .ini
-
-#setp lincurve.0.y-val-00 -.25
-#setp lincurve.0.y-val-01 0
-#setp lincurve.0.y-val-02 5.0
-#setp lincurve.0.x-val-00 -.25
-#setp lincurve.0.x-val-01 0
-#setp lincurve.0.x-val-02 5
-
-setp lincurve.0.y-val-00 0
-setp lincurve.0.y-val-01 0
-setp lincurve.0.y-val-02 0
-setp lincurve.0.x-val-00 0
-setp lincurve.0.x-val-01 0
-setp lincurve.0.x-val-02 0
-
-# get the extruder speed into sum2.2 and ddt
-net extruder-speed mux4.0.out sum2.2.in0 ddt.0.in
-# get acceleration into lincurve
-net extruder-accel ddt.0.out lincurve.0.in
-# get adjusted speed for adding to current speed during accelleration
-net speed-adjustment lincurve.0.out sum2.2.in1
-net extruder-speed-adjusted sum2.2.out hpg.stepgen.03.velocity-cmd
-
-#########
-###todo
-###manual extrusion with analog out 01 (velocity in mm/s) and mux2 selectable by digital input 01
-#########
+net motor.03.pos-fb <= hpg.stepgen.03.position-fb
+net motor.03.pos-fb => axis.3.motor-pos-fb
 
 
 # timing parameters
@@ -352,13 +224,12 @@ setp hpg.stepgen.03.position-scale  [AXIS_3]SCALE
 setp hpg.stepgen.03.maxvel          [AXIS_3]STEPGEN_MAX_VEL
 setp hpg.stepgen.03.maxaccel        [AXIS_3]STEPGEN_MAX_ACC
 
-setp hpg.stepgen.03.control-type    1
-
 #setp hpg.stepgen.03.step_type       0
 # P8.30 GPIO2.25
 setp hpg.stepgen.03.steppin        916
 # P8.21 GPIO1.30
 setp hpg.stepgen.03.dirpin         912
+
 
 # ##################################################
 # Standard I/O - EStop, Enables, Limit Switches, Etc
@@ -416,13 +287,13 @@ setp bb_gpio.p9.in-13.invert 1
 
 # Uncomment if you actually have limit switches setup
 # You probably want to setup homing in the INI file, as well
-net limit-x-max => axis.0.home-sw-in
-#net limit-x-max => axis.0.neg-lim-sw-in
+#net limit-x-min => axis.0.home-sw-in
+#net limit-x-min => axis.0.neg-lim-sw-in
 #net limit-x-max => axis.0.pos-lim-sw-in
-net limit-y-max => axis.1.home-sw-in
+#net limit-y-min => axis.1.home-sw-in
 #net limit-y-min => axis.1.neg-lim-sw-in
 #net limit-y-max => axis.1.pos-lim-sw-in
-net limit-z-max => axis.2.home-sw-in
+#net limit-z-min => axis.2.home-sw-in
 #net limit-z-min => axis.2.neg-lim-sw-in
 #net limit-z-max => axis.2.pos-lim-sw-in
 
@@ -480,35 +351,6 @@ newsig bed.temp.meas float
 
 setp hpg.pwmgen.00.pwm_period       10000000
 
-#signals for comparing set value and actual value of temperature
-#newsig M209_set_temp             float
-newsig sub_temp_min               float
-newsig add_temp_max               float
-newsig e0_temp_within_range       bit
-
-#set boundaries with sum2 +1 and -1 of the wanted temperature
-sets add_temp_max 1
-sets sub_temp_min -1
-
-net e0.temp.set  => sum2.0.in0
-setp sum2.0.in1 2
-#net add_temp_max.out => sum2.0.in1
-
-net e0.temp.set  => sum2.1.in0
-setp sum2.1.in1 -2
-#net sub_temp_min.out => sum2.1.in1
-
-#the values will be given to the wcomp.0 function
-net minboundary sum2.1.out => wcomp.0.min
-net maxboundary sum2.0.out => wcomp.0.max
-net e0.temp.meas => wcomp.0.in
-
-#the output of wcomp.0 will say if measured temperature is in range of set value
-#this needs to be coupled to a digital input for M66 readout
-#net e0_temp_within_range.in <= wcomp.0.out
-#net e0_temp_within_range.out => motion.digital-in-00
-net e0_temp_within_range wcomp.0.out => motion.digital-in-00
-
 # Bed Heater FET 1
 setp hpg.pwmgen.00.out.00.pin       811
 setp hpg.pwmgen.00.out.00.enable    1
@@ -520,7 +362,7 @@ setp hpg.pwmgen.00.out.01.enable    1
 setp hpg.pwmgen.00.out.01.value     0.0
 
 # E1 Heater FET 3
-setp hpg.pwmgen.00.out.02.pin       941
+setp hpg.pwmgen.00.out.02.pin       927
 setp hpg.pwmgen.00.out.02.enable    1
 setp hpg.pwmgen.00.out.02.value     0.0
 
@@ -530,29 +372,21 @@ setp hpg.pwmgen.00.out.03.enable    1
 setp hpg.pwmgen.00.out.03.value     0.0
 
 # FET 5 - Fan / LED
-setp hpg.pwmgen.00.out.04.pin       927
+setp hpg.pwmgen.00.out.04.pin       941
 setp hpg.pwmgen.00.out.04.enable    1
 setp hpg.pwmgen.00.out.04.value     0.0
-setp hpg.pwmgen.00.out.04.scale     255
-#linking motion.analog-out-00 to fan speed.set.signal
-net fan.1.speed.set <= motion.analog-out-12
-net fan.1.speed.set => hpg.pwmgen.00.out.04.value
-#net fan.1.value motion.analog-out-12 hpg.pwmgen.00.out.04.value
 
 # FET 6 - Fan / LED
 setp hpg.pwmgen.00.out.05.pin       922
 setp hpg.pwmgen.00.out.05.enable    1
 setp hpg.pwmgen.00.out.05.value     0.0
-setp hpg.pwmgen.00.out.05.scale     255
-#net hpg.pwmgen.00.out.05.value motion.analog-out-13
-net fan.2.speed.set motion.analog-out-13 hpg.pwmgen.00.out.05.value
 
 # PID for Extruder 0 temperature control
 net e0.temp.meas    <= Therm.ch-04.value
 net e0.temp.meas    => pid.0.feedback
 
 sets e0.temp.set  0
-net e0.temp.set     => pid.0.command motion.analog-out-01
+net e0.temp.set     => pid.0.command
 
 net e0.heater  <= pid.0.output
 net e0.heater  => limit1.0.in
@@ -568,7 +402,7 @@ net bed.temp.meas    <= Therm.ch-05.value
 net bed.temp.meas    => pid.1.feedback
 
 sets bed.temp.set  0
-net bed.temp.set     => pid.1.command motion.analog-out-00
+net bed.temp.set     => pid.1.command
 
 net bed.heater  <= pid.1.output
 net bed.heater  => limit1.1.in
@@ -584,9 +418,9 @@ setp limit1.1.min 0
 #setp pid.0.FF0      0
 #setp pid.0.FF1      0
 #setp pid.0.FF2      0
-setp pid.0.Pgain  0.20
+setp pid.0.Pgain  0.30
 setp pid.0.Igain  0.00001
-setp pid.0.Dgain  0.8375
+setp pid.0.Dgain  0.9375
 setp pid.0.maxerrorI 1.0
 setp pid.0.bias    0.5
 setp pid.0.enable   1

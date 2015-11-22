@@ -18,7 +18,7 @@ loadusr -W haltalk
 # ###################################
 
 # kinematics
-loadrt lineardeltakins
+loadrt trivkins
 
 # settings for delta printer
 setp lineardeltakins.L [MACHINE]CF_ROD
