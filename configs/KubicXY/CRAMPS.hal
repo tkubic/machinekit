@@ -9,6 +9,8 @@
 # Launch the setup script to make sure hardware setup looks good
 loadusr -w ./setup.sh
 
+# start haltalk server
+loadusr -W haltalk
 
 # ###################################
 # Core EMC/HAL Loads
@@ -286,13 +288,13 @@ setp bb_gpio.p9.in-13.invert 1
 
 # Uncomment if you actually have limit switches setup
 # You probably want to setup homing in the INI file, as well
-#net limit-x-min => axis.0.home-sw-in
+net limit-x-min => axis.0.home-sw-in
 #net limit-x-min => axis.0.neg-lim-sw-in
 #net limit-x-max => axis.0.pos-lim-sw-in
-#net limit-y-min => axis.1.home-sw-in
+net limit-y-max => axis.1.home-sw-in
 #net limit-y-min => axis.1.neg-lim-sw-in
 #net limit-y-max => axis.1.pos-lim-sw-in
-#net limit-z-min => axis.2.home-sw-in
+net limit-z-min => axis.2.home-sw-in
 #net limit-z-min => axis.2.neg-lim-sw-in
 #net limit-z-max => axis.2.pos-lim-sw-in
 
