@@ -10,7 +10,7 @@
 loadusr -w ./setup.sh
 
 # start haltalk server
-loadusr -W haltalk
+#loadusr -W haltalk
 
 # ###################################
 # Core EMC/HAL Loads
@@ -22,7 +22,7 @@ loadrt trivkins
 # motion controller, get name and thread periods from ini file
 # trajectory planner
 loadrt tp
-loadrt [EMCMOT]EMCMOT servo_period_nsec=[EMCMOT]SERVO_PERIOD num_joints=[TRAJ]AXES tp=tp kins=trivkins
+loadrt [EMCMOT]EMCMOT servo_period_nsec=[EMCMOT]SERVO_PERIOD num_joints=[TRAJ]AXES num_aio=15 tp=tp kins=trivkins
 
 
 # load low-level drivers
@@ -36,6 +36,11 @@ loadrt CoreXY
 # Python user-mode HAL module to read ADC value and generate a thermostat output for PWM
 # c = analog input channel and thermistor table
 loadusr -Wn Therm hal_temp_bbb -n Therm -c 04:epcos_B57560G1104,05:epcos_B57560G1104 -b CRAMPS
+
+#used for comparing temperature set value with actual for waiting on temperature
+loadrt wcomp count=1
+loadrt sum2 count=4
+
 
 # ################################################
 # THREADS
@@ -54,6 +59,91 @@ addf CoreXY.0.write                       servo-thread
 addf hpg.update             		  servo-thread
 addf bb_gpio.write                        servo-thread
 
+# ###################################
+# UI remote component definition
+# ###################################
+sete 1 0.1
+
+newcomp fdm-e0 timer=100
+newpin  fdm-e0 fdm-e0.temp.meas      float in eps=1
+newpin  fdm-e0 fdm-e0.temp.set       float io
+newpin  fdm-e0 fdm-e0.temp.standby   float in
+newpin  fdm-e0 fdm-e0.temp.limit.min float in
+newpin  fdm-e0 fdm-e0.temp.limit.max float in
+newpin  fdm-e0 fdm-e0.temp.in-range  bit   in
+newpin  fdm-e0 fdm-e0.error          bit   in
+newpin  fdm-e0 fdm-e0.active         bit   in
+ready   fdm-e0
+
+newcomp fdm-hbp timer=100
+newpin  fdm-hbp fdm-hbp.temp.meas      float in eps=1
+newpin  fdm-hbp fdm-hbp.temp.set       float io
+newpin  fdm-hbp fdm-hbp.temp.standby   float in
+newpin  fdm-hbp fdm-hbp.temp.limit.min float in
+newpin  fdm-hbp fdm-hbp.temp.limit.max float in
+newpin  fdm-hbp fdm-hbp.temp.in-range  bit   in
+newpin  fdm-hbp fdm-hbp.error          bit   in
+newpin  fdm-hbp fdm-hbp.active         bit   in
+ready   fdm-hbp
+
+newcomp fdm-f0 timer=100
+newpin fdm-f0 fdm-f0.set float io
+ready fdm-f0
+
+newcomp fdm-f1 timer=100
+newpin fdm-f1 fdm-f1.set float io
+ready fdm-f1
+
+#newcomp fdm-f2 timer=100
+#newpin fdm-f2 fdm-f2.set float io
+#ready fdm-f2
+
+#newcomp fdm-f3 timer=100
+#newpin fdm-f3 fdm-f3.set float io
+#ready fdm-f3
+
+newcomp fdm-l0 timer=100
+newpin fdm-l0 fdm-l0.r float io
+newpin fdm-l0 fdm-l0.g float io
+newpin fdm-l0 fdm-l0.b float io
+newpin fdm-l0 fdm-l0.w float io
+ready  fdm-l0
+
+newcomp fdm-ve-jog timer=100
+newpin fdm-ve-jog fdm-ve-jog.distance       float io
+newpin fdm-ve-jog fdm-ve-jog.velocity       float io
+newpin fdm-ve-jog fdm-ve-jog.direction      bit   io
+newpin fdm-ve-jog fdm-ve-jog.trigger        bit   io
+newpin fdm-ve-jog fdm-ve-jog.continous      bit   out
+newpin fdm-ve-jog fdm-ve-jog.dtg            float in
+newpin fdm-ve-jog fdm-ve-jog.max-velocity   float in
+ready  fdm-ve-jog
+
+newcomp fdm-ve-params timer=100
+newpin fdm-ve-params fdm-ve-params.filament-dia     float io
+newpin fdm-ve-params fdm-ve-params.retract-vel      float io
+newpin fdm-ve-params fdm-ve-params.retract-len      float io
+newpin fdm-ve-params fdm-ve-params.extrude-scale    float io
+newpin fdm-ve-params fdm-ve-params.accel-adj-gain   float io
+ready  fdm-ve-params
+
+#newcomp gantry-config timer=100
+#newpin gantry-config gantry-config.offset-left  float io
+#newpin gantry-config gantry-config.offset-right float io
+#ready gantry-config
+    
+newcomp fdm-e0-pid timer=100
+newpin fdm-e0-pid fdm-e0-pid.Pgain              float io
+newpin fdm-e0-pid fdm-e0-pid.Igain              float io
+newpin fdm-e0-pid fdm-e0-pid.Dgain              float io
+newpin fdm-e0-pid fdm-e0-pid.maxerrorI          float io
+newpin fdm-e0-pid fdm-e0-pid.bias               float io
+newpin fdm-e0-pid fdm-e0-pid.max                float in
+newpin fdm-e0-pid fdm-e0-pid.min                float in
+newpin fdm-e0-pid fdm-e0-pid.command            float io
+newpin fdm-e0-pid fdm-e0-pid.feedback           float in
+newpin fdm-e0-pid fdm-e0-pid.output             float in
+ready  fdm-e0-pid
 
 # ######################################################
 # Axis-of-motion Specific Configs (not the GUI)
@@ -251,7 +341,7 @@ net tool-change-loop iocontrol.0.tool-change => iocontrol.0.tool-changed
 
 # Axis enable signal (active low)
 net emcmot.00.enable => bb_gpio.p9.out-14
-setp bb_gpio.p9.out-14.invert 1
+setp bb_gpio.p9.out-14.invert 0
 
 # Machine power
 # Use halui.machine.is-on instead?
@@ -352,6 +442,35 @@ newsig bed.temp.meas float
 
 setp hpg.pwmgen.00.pwm_period       10000000
 
+#signals for comparing set value and actual value of temperature
+#newsig M209_set_temp             float
+newsig sub_temp_min               float
+newsig add_temp_max               float
+newsig e0_temp_within_range       bit
+
+#set boundaries with sum2 +1 and -1 of the wanted temperature
+sets add_temp_max 1
+sets sub_temp_min -1
+
+net e0.temp.set  => sum2.0.in0
+setp sum2.0.in1 2
+#net add_temp_max.out => sum2.0.in1
+
+net e0.temp.set  => sum2.1.in0
+setp sum2.1.in1 -2
+#net sub_temp_min.out => sum2.1.in1
+
+#the values will be given to the wcomp.0 function
+net minboundary sum2.1.out => wcomp.0.min
+net maxboundary sum2.0.out => wcomp.0.max
+net e0.temp.meas => wcomp.0.in
+
+#the output of wcomp.0 will say if measured temperature is in range of set value
+#this needs to be coupled to a digital input for M66 readout
+#net e0_temp_within_range.in <= wcomp.0.out
+#net e0_temp_within_range.out => motion.digital-in-00
+net e0_temp_within_range wcomp.0.out => motion.digital-in-00
+
 # Bed Heater FET 1
 setp hpg.pwmgen.00.out.00.pin       811
 setp hpg.pwmgen.00.out.00.enable    1
@@ -363,7 +482,7 @@ setp hpg.pwmgen.00.out.01.enable    1
 setp hpg.pwmgen.00.out.01.value     0.0
 
 # E1 Heater FET 3
-setp hpg.pwmgen.00.out.02.pin       927
+setp hpg.pwmgen.00.out.02.pin       941
 setp hpg.pwmgen.00.out.02.enable    1
 setp hpg.pwmgen.00.out.02.value     0.0
 
@@ -373,21 +492,29 @@ setp hpg.pwmgen.00.out.03.enable    1
 setp hpg.pwmgen.00.out.03.value     0.0
 
 # FET 5 - Fan / LED
-setp hpg.pwmgen.00.out.04.pin       941
+setp hpg.pwmgen.00.out.04.pin       927
 setp hpg.pwmgen.00.out.04.enable    1
 setp hpg.pwmgen.00.out.04.value     0.0
+setp hpg.pwmgen.00.out.04.scale     255
+#linking motion.analog-out-00 to fan speed.set.signal
+net fan.1.speed.set <= motion.analog-out-12
+net fan.1.speed.set => hpg.pwmgen.00.out.04.value
+#net fan.1.value motion.analog-out-12 hpg.pwmgen.00.out.04.value
 
 # FET 6 - Fan / LED
 setp hpg.pwmgen.00.out.05.pin       922
 setp hpg.pwmgen.00.out.05.enable    1
 setp hpg.pwmgen.00.out.05.value     0.0
+setp hpg.pwmgen.00.out.05.scale     255
+#net hpg.pwmgen.00.out.05.value motion.analog-out-13
+net fan.2.speed.set motion.analog-out-13 hpg.pwmgen.00.out.05.value
 
 # PID for Extruder 0 temperature control
 net e0.temp.meas    <= Therm.ch-04.value
 net e0.temp.meas    => pid.0.feedback
 
 sets e0.temp.set  0
-net e0.temp.set     => pid.0.command
+net e0.temp.set     => pid.0.command motion.analog-out-02 
 
 net e0.heater  <= pid.0.output
 net e0.heater  => limit1.0.in
@@ -403,7 +530,7 @@ net bed.temp.meas    <= Therm.ch-05.value
 net bed.temp.meas    => pid.1.feedback
 
 sets bed.temp.set  0
-net bed.temp.set     => pid.1.command
+net bed.temp.set     => pid.1.command motion.analog-out-00
 
 net bed.heater  <= pid.1.output
 net bed.heater  => limit1.1.in
@@ -419,9 +546,9 @@ setp limit1.1.min 0
 #setp pid.0.FF0      0
 #setp pid.0.FF1      0
 #setp pid.0.FF2      0
-setp pid.0.Pgain  0.30
-setp pid.0.Igain  0.00001
-setp pid.0.Dgain  0.9375
+setp pid.0.Pgain  0.0324
+setp pid.0.Igain  0.0112
+setp pid.0.Dgain  0.0235
 setp pid.0.maxerrorI 1.0
 setp pid.0.bias    0.5
 setp pid.0.enable   1
@@ -436,3 +563,64 @@ setp pid.1.Dgain  0.0
 setp pid.1.maxerrorI 1.0
 setp pid.1.bias    0.5
 setp pid.1.enable   1
+
+# ##################################################
+# UI linking
+# ##################################################
+
+net bed.temp.meas       => fdm-hbp.temp.meas
+#net hbp.temp.set       <=> fdm-hbp.temp.set
+#net hbp.temp.standby    => fdm-hbp.temp.standby
+#net hbp.temp.limit.min  => fdm-hbp.temp.limit.min
+#net hbp.temp.limit.max  => fdm-hbp.temp.limit.max
+#net hbp.temp.in-range   => fdm-hbp.temp.in-range
+#net hbp.error           => fdm-hbp.error
+#net hbp.active          => fdm-hbp.active
+net e0.temp.meas        => fdm-e0.temp.meas
+#net e0.temp.set        <=> fdm-e0.temp.set
+net e0.temp.standby     => fdm-e0.temp.standby
+net e0.temp.limit.min   => fdm-e0.temp.limit.min
+net e0.temp.limit.max   => fdm-e0.temp.limit.max
+net e0.temp.in-range    => fdm-e0.temp.in-range
+net e0.error            => fdm-e0.error
+net e0.active           => fdm-e0.active
+net f0.set             <=> fdm-f0.set
+net f1.set             <=> fdm-f1.set
+#net f2.set             <=> fdm-f2.set
+#net f3.set             <=> fdm-f3.set
+#net l0.r               <=> fdm-l0.r
+#net l0.g               <=> fdm-l0.g
+#net l0.b               <=> fdm-l0.b
+#net l0.w               <=> fdm-l0.w
+net ve.jog-trigger     <=> fdm-ve-jog.trigger
+net ve.jog-continous   <=  fdm-ve-jog.continous
+net ve.jog-velocity    <=> fdm-ve-jog.velocity
+net ve.jog-distance    <=> fdm-ve-jog.distance
+net ve.jog-direction   <=> fdm-ve-jog.direction
+net ve.jog-dtg          => fdm-ve-jog.dtg
+setp fdm-ve-jog.max-velocity [AXIS_3]MAX_VELOCITY
+net ve.filament-dia             <=> fdm-ve-params.filament-dia
+net ve.retract-vel              <=> fdm-ve-params.retract-vel
+net ve.retract-len              <=> fdm-ve-params.retract-len
+net ve.extrude-scale            <=> fdm-ve-params.extrude-scale
+net ve.extrude-accel-adj-gain   <=> fdm-ve-params.accel-adj-gain
+
+#net home-offset-zr      <=> gantry-config.offset-right
+#net home-offset-zl      <=> gantry-config.offset-left
+
+# monitor the estop error sources
+newg error-sources 100
+#newm error-sources estop-user
+#newm error-sources gpio-ok
+#newm error-sources pwm-ok
+#newm error-sources temp-ok
+#newm error-sources e0.temp.in-limit
+#newm error-sources e0.therm-ok
+#newm error-sources hbp.temp.in-limit
+#newm error-sources hbp.therm-ok
+
+
+
+# start haltalk server after everything is initialized 
+# else binding the remote components on the UI might fail
+loadusr -W haltalk

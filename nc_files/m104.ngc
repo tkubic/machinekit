@@ -1,5 +1,5 @@
 o<m104> sub
-#500=1; extruder io start index
+#500=2; extruder io start index
 #501=0; not synchronized
 #502=#500
 o100 if [EXISTS[#<i>]]

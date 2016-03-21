@@ -1,6 +1,6 @@
 o<m106> sub
 #500=12; fan io start index
-#501=0; synchronized
+#501=0; not synchronized
 #502=#500
 o100 if [EXISTS[#<i>]]
     o110 if [#<i> EQ 1]
